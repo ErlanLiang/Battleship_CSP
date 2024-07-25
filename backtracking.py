@@ -93,6 +93,57 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace):
 
     return solutions, bt_search.nodesExplored
 
+def GAC(unAssignedVars, csp, allSolutions, trace):
+    '''
+    GAC Search. unAssignedVars is the current set of unassigned variables.'''
+    if unAssignedVars.empty():
+        sol = []
+        for v in csp.variables():
+            # print(v.name(), ": ", v.getValue())
+            sol.append((v, v.getValue()))
+        return [sol] #each call returns a list of solutions found
+    sols = []
+    v = unAssignedVars.extract()
+    for val in v.curDomain():
+        v.setValue(val)
+        noDWO = True
+        if GacEnforce(csp.constraintsOf(v), csp, v, val) == "DWO":
+            noDWO = False
+        if noDWO:
+            new_sol = GAC(unAssignedVars, csp, allSolutions, trace)
+            if new_sol:
+                sols.extend(new_sol)
+        #restore values pruned by var = val assignment
+        v.restoreValues(v, val)
+    v.unAssign()
+    unAssignedVars.insert(v)
+    return sols
+
+def GacEnforce(constraints, csp, var, val):
+    '''Enforce GAC on all active constraints of var.  If var is None
+       then enforce GAC on all constraints of the csp.  If var is
+       assigned then enforce GAC on all constraints containing var.
+       If var is unassigned then enforce GAC on all constraints containing var
+       and possibly other unassigned variables.  val is the value being
+       assigned to var.  If var is None then val is ignored.  Returns
+       False if a DWO is detected, True otherwise.  If trace is True
+       then print out the changes to the variable domains.'''
+    while constraints:
+        c = constraints.pop()
+        for cur_var in c.scope():
+            # print("cur_var: ", cur_var)
+            # print("cur_var.curDomain(): ", cur_var.curDomain())
+            for cur_val in cur_var.curDomain():
+                # print("cur_val: ", cur_val)
+                if not c.hasSupport(cur_var, cur_val):
+                    cur_var.pruneValue(cur_val, var, val)
+                    if cur_var.curDomainSize() == 0:
+                        return "DWO"
+                    for recheck in csp.constraintsOf(cur_var):
+                        if recheck != c and recheck not in constraints:
+                            csp.constraintsOf(cur_var).append(recheck)
+    return "OK"
+
 def BT(unAssignedVars, csp, allSolutions, trace):
     '''Backtracking Search. unAssignedVars is the current set of
        unassigned variables.  csp is the csp problem, allSolutions is
@@ -105,7 +156,7 @@ def BT(unAssignedVars, csp, allSolutions, trace):
       then return a list of all of them.
 
       If we are only looking for one solution we stop trying
-      further values of the variable currently being tried as
+      further values of the variable currently being tri  ed as
       soon as one of the recursive calls returns some solutions.
     '''
     if unAssignedVars.empty():
@@ -121,20 +172,67 @@ def BT(unAssignedVars, csp, allSolutions, trace):
     for val in nxtvar.domain():
         if trace: pass #print "==> {} = {}".format(nxtvar.name(), val)
         nxtvar.setValue(val)
+        # add the WaterAroundShipConstraint to the csp if the variable is a ship(not 0)
+        #TODO: add the constraint
         constraintsOK = True
-        for cnstr in csp.constraintsOf(nxtvar):
-            if cnstr.numUnassigned() == 0:
-                if not cnstr.check():
-                    constraintsOK = False
-                    if trace: pass #print "<==falsified constraint\n"
-                    break
+        if val == 1:
+            # check top left right bottom to see if there is a ship
+            # if there is a ship, add the variable to the constraint
+            # print("in")
+            if not check_ships(csp, nxtvar, csp.size):
+                constraintsOK = False
+                print("got")
+
+       
         if constraintsOK:
-            new_solns = BT(unAssignedVars, csp, allSolutions, trace)
-            if new_solns:
-                solns.extend(new_solns)
-            if len(solns) > 0 and not allSolutions:
-                break  #don't bother with other values of nxtvar
-                       #as we found a soln.
+            for cnstr in csp.constraintsOf(nxtvar):
+                # print("cnstr: ", cnstr)
+                # i`f type(cnstr) == WaterAroundShipConstraint:
+                #     print("in")`
+                if cnstr.numUnassigned() == 0:
+                    if not cnstr.check():
+                        # print("falsified constraint")
+                        constraintsOK = False
+                        if trace: pass #print "<==falsified constraint\n"
+                        break
+            if constraintsOK:
+                new_solns = BT(unAssignedVars, csp, allSolutions, trace)
+                if new_solns:
+                    solns.extend(new_solns)
+                if len(solns) > 0 and not allSolutions:
+                    break  #don't bother with other values of nxtvar
+                        #as we found a soln.
+    
     nxtvar.unAssign()
     unAssignedVars.insert(nxtvar)
     return solns
+
+def check_ships(csp, var, size):
+    # check top left right bottom to see if there is a ship
+    # if there is a ship, add the variable to the constraint
+    num = int(var.name())
+    top = num + size
+    bottom = num - size
+    left = num + 1
+    right = num - 1
+
+    has_top = str(top) in csp.ship_con
+    has_bottom = str(bottom) in csp.ship_con
+    has_left = str(left) in csp.ship_con
+    has_right = str(right) in csp.ship_con
+
+    if (has_top or has_bottom) and (has_left or has_right):
+        return False
+    # elif has_top and has_bottom:
+    #     # if len(csp.ship_con[str(top)].scope()) + len(csp.ship_con[str(bottom)].scope()) + 1 > 4:
+    #     #     return False
+    #     csp.vertical.add(top)
+    #     csp.vertical.add(bottom)
+    # elif has_left and has_right:
+    #     # if len(csp.ship_con[str(left)].scope()) + len(csp.ship_con[str(right)].scope()) + 1 > 4:
+    #     #     return False
+    #     csp.horizontal.add(left)
+    #     csp.horizontal.add(right)
+    return True
+    
+

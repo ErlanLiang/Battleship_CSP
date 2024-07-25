@@ -176,12 +176,17 @@ class CSP:
        to put some other functions that depend on which variables
        and constraints are active'''
 
-    def __init__(self, name, variables, constraints):
+    def __init__(self, name, variables, constraints, varn, size):
         '''create a CSP problem object passing it a name, a list of
            variable objects, and a list of constraint objects'''
         self._name = name
         self._variables = variables
         self._constraints = constraints
+        self._varn = varn
+        self.ship_con = {}
+        self.vertical = set()
+        self.horizontal = set()
+        self.size = size
 
         #some sanity checks
         varsInCnst = set()
@@ -202,6 +207,9 @@ class CSP:
 
     def name(self):
         return self._name
+    
+    def getVar(self, name):
+        return self._varn[name]
 
     def variables(self):
         return list(self._variables)
@@ -212,7 +220,9 @@ class CSP:
     def constraintsOf(self, var):
         '''return constraints with var in their scope'''
         try:
+            # print("var: ", var.name())
             i = self.variables().index(var)
+            # print("i: ", i)
             return list(self.constraints_of[i])
         except:
             print("Error: tried to find constraint of variable {} that isn't in this CSP {}".format(var, self.name()))
